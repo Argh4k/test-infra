@@ -91,6 +91,7 @@ type gkeDeployer struct {
 	project                     string
 	zone                        string
 	region                      string
+	zoneOrRegion                string
 	location                    string
 	additionalZones             string
 	nodeLocations               string
@@ -151,9 +152,11 @@ func newGKE(provider, project, zone, region, network, image, imageFamily, imageP
 	}
 	if zone != "" {
 		g.zone = zone
+		g.zoneOrRegion = zone
 		g.location = "--zone=" + zone
 	} else if region != "" {
 		g.region = region
+		g.zoneOrRegion = region
 		g.location = "--region=" + region
 	}
 
@@ -779,13 +782,7 @@ func (g *gkeDeployer) getClusterFirewall() (string, error) {
 	// // nodes can be slow to get. Use the hash from the lexically first
 	// // node pool instead.
 	// return "e2e-ports-" + g.instanceGroups[0].uniq, nil
-	firewall := "e2e-ports-" + g.cluster
-	if g.region != "" {
-		firewall += "-" + g.region
-	} else {
-		firewall += "-" + g.zone
-	}
-	return firewall, nil
+	return fmt.Sprintf("e2e-ports-%s-%s", g.cluster, g.zoneOrRegion), nil
 }
 
 // This function ensures that all firewall-rules are deleted from specific network.
@@ -916,7 +913,7 @@ func (g *gkeDeployer) Down() error {
 	g.instanceGroups = nil
 
 	clusterExistsBytes, err := control.Output(exec.Command("gcloud", g.containerArgs("clusters",
-		"list", "--project="+g.project, fmt.Sprintf("--filter=(name=%s AND location=%s)", g.cluster, g.location))...))
+		"list", "--project="+g.project, fmt.Sprintf("--filter=(name=%s AND location=%s)", g.cluster, g.zoneOrRegion))...))
 	if strings.TrimSpace(string(clusterExistsBytes)) == "" || err != nil {
 		return nil
 	}
