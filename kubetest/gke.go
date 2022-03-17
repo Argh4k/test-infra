@@ -112,6 +112,7 @@ type gkeDeployer struct {
 	sshProxyInstanceName        string
 	poolRe                      *regexp.Regexp
 	dumpedConfigMaps            []gkeConfigMap
+	firewallName                string
 
 	setup          bool
 	kubecfg        string
@@ -308,6 +309,9 @@ func newGKE(provider, project, zone, region, network, image, imageFamily, imageP
 	if err != nil {
 		return nil, fmt.Errorf("--gke-dump-configmaps must be valid JSON, unmarshal error: %v, JSON: %q", err, *gkeDumpConfigMaps)
 	}
+
+	//TODO: make it random
+	g.firewallName = "32as3141fdsgh"
 
 	return g, nil
 }
@@ -557,9 +561,9 @@ func (g *gkeDeployer) TestSetup() error {
 	if err := g.setupBastion(); err != nil {
 		return err
 	}
-	if err := g.setupEnv(); err != nil {
-		return err
-	}
+	// if err := g.setupEnv(); err != nil {
+	// 	return err
+	// }
 	g.setup = true
 	return nil
 }
@@ -644,23 +648,23 @@ func (g *gkeDeployer) getKubeConfig() error {
 // setupEnv is to appease ginkgo-e2e.sh and other pieces of the e2e infrastructure. It
 // would be nice to handle this elsewhere, and not with env
 // variables. c.f. kubernetes/test-infra#3330.
-func (g *gkeDeployer) setupEnv() error {
-	// If singleZoneNodeInstanceGroup is true, set NODE_INSTANCE_GROUP to the
-	// names of instance groups that are in the same zone as the lexically first
-	// instance group. Otherwise set NODE_INSTANCE_GROUP to the names of all
-	// instance groups.
-	var filt []string
-	zone := g.instanceGroups[0].zone
-	for _, ig := range g.instanceGroups {
-		if !g.singleZoneNodeInstanceGroup || ig.zone == zone {
-			filt = append(filt, ig.name)
-		}
-	}
-	if err := os.Setenv("NODE_INSTANCE_GROUP", strings.Join(filt, ",")); err != nil {
-		return fmt.Errorf("error setting NODE_INSTANCE_GROUP: %w", err)
-	}
-	return nil
-}
+// func (g *gkeDeployer) setupEnv() error {
+// 	// If singleZoneNodeInstanceGroup is true, set NODE_INSTANCE_GROUP to the
+// 	// names of instance groups that are in the same zone as the lexically first
+// 	// instance group. Otherwise set NODE_INSTANCE_GROUP to the names of all
+// 	// instance groups.
+// 	var filt []string
+// 	zone := g.instanceGroups[0].zone
+// 	for _, ig := range g.instanceGroups {
+// 		if !g.singleZoneNodeInstanceGroup || ig.zone == zone {
+// 			filt = append(filt, ig.name)
+// 		}
+// 	}
+// 	if err := os.Setenv("NODE_INSTANCE_GROUP", strings.Join(filt, ",")); err != nil {
+// 		return fmt.Errorf("error setting NODE_INSTANCE_GROUP: %w", err)
+// 	}
+// 	return nil
+// }
 
 func (g *gkeDeployer) ensureFirewall() error {
 	if g.network == "default" {
@@ -688,7 +692,7 @@ func (g *gkeDeployer) ensureFirewall() error {
 		if err != nil {
 			return fmt.Errorf("firewall-rules list failed: %s", util.ExecError(err))
 		}
-	} else {
+	} else if len(g.instanceGroups) > 0 {
 		tagOut, err = exec.Command("gcloud", "compute", "instances", "list",
 			"--project="+g.project,
 			"--filter=metadata.created-by ~ "+g.instanceGroups[0].path,
@@ -697,6 +701,8 @@ func (g *gkeDeployer) ensureFirewall() error {
 		if err != nil {
 			return fmt.Errorf("instances list failed: %s", util.ExecError(err))
 		}
+	} else {
+		return fmt.Errorf("If the ")
 	}
 	tag := strings.TrimSpace(string(tagOut))
 	if tag == "" {
@@ -747,8 +753,9 @@ func (g *gkeDeployer) getInstanceGroupsFromGcloud() (string, error) {
 
 func (g *gkeDeployer) parseInstanceGroupsFromGcloud(igs string) ([]*ig, error) {
 	igURLs := strings.Split(strings.TrimSpace(igs), ";")
-	if len(igURLs) == 0 {
-		return nil, fmt.Errorf("no instance group URLs returned by gcloud, output %q", string(igs))
+	if len(igURLs) == 0 || len(igs) == 0 {
+		fmt.Printf("warning: no instance group URLs returned by gcloud, output %q\n", string(igs))
+		return nil, nil
 	}
 	sort.Strings(igURLs)
 	var instanceGroups []*ig
@@ -763,14 +770,16 @@ func (g *gkeDeployer) parseInstanceGroupsFromGcloud(igs string) ([]*ig, error) {
 }
 
 func (g *gkeDeployer) getClusterFirewall() (string, error) {
-	if err := g.getInstanceGroups(); err != nil {
-		return "", err
-	}
-	// We want to ensure that there's an e2e-ports-* firewall rule
-	// that maps to the cluster nodes, but the target tag for the
-	// nodes can be slow to get. Use the hash from the lexically first
-	// node pool instead.
-	return "e2e-ports-" + g.instanceGroups[0].uniq, nil
+	// if err := g.getInstanceGroups(); err != nil {
+	// 	return "", err
+	// }
+	// // We want to ensure that there's an e2e-ports-* firewall rule
+	// // that maps to the cluster nodes, but the target tag for the
+	// // nodes can be slow to get. Use the hash from the lexically first
+	// // node pool instead.
+	// return "e2e-ports-" + g.instanceGroups[0].uniq, nil
+
+	return "e2e-ports-" + g.firewallName, nil
 }
 
 // This function ensures that all firewall-rules are deleted from specific network.
