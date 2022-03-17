@@ -909,6 +909,12 @@ func (g *gkeDeployer) Down() error {
 	}
 	g.instanceGroups = nil
 
+	clusterExistsBytes, err := control.Output(exec.Command("gcloud", g.containerArgs("clusters",
+		"list", "--project="+g.project, fmt.Sprintf("--filter=(name=%s AND location=%s", g.cluster, g.location))...))
+	if strings.TrimSpace(string(clusterExistsBytes)) == "" || err != nil {
+		return nil
+	}
+
 	operationNameBytes, err := control.Output(exec.Command(
 		"gcloud", g.containerArgs("operations", "list", "--project="+g.project,
 			g.location, "--format=value(name)", fmt.Sprintf("--filter=(status=RUNNING AND targetLink ~ /clusters/%s$)", g.cluster))...))
