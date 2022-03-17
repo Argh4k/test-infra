@@ -752,8 +752,9 @@ func (g *gkeDeployer) getInstanceGroupsFromGcloud() (string, error) {
 }
 
 func (g *gkeDeployer) parseInstanceGroupsFromGcloud(igs string) ([]*ig, error) {
+	fmt.Printf("igs := %s", igs)
 	igURLs := strings.Split(strings.TrimSpace(igs), ";")
-	if len(igURLs) == 0 || len(igs) == 0 {
+	if len(igURLs) == 0 || len(strings.TrimSpace(igs)) == 0 {
 		fmt.Printf("warning: no instance group URLs returned by gcloud, output %q\n", string(igs))
 		return nil, nil
 	}
@@ -778,8 +779,13 @@ func (g *gkeDeployer) getClusterFirewall() (string, error) {
 	// // nodes can be slow to get. Use the hash from the lexically first
 	// // node pool instead.
 	// return "e2e-ports-" + g.instanceGroups[0].uniq, nil
-
-	return "e2e-ports-" + g.firewallName, nil
+	firewall := "e2e-ports-" + g.cluster
+	if g.region != "" {
+		firewall += "-" + g.region
+	} else {
+		firewall += "-" + g.zone
+	}
+	return firewall, nil
 }
 
 // This function ensures that all firewall-rules are deleted from specific network.
@@ -910,7 +916,7 @@ func (g *gkeDeployer) Down() error {
 	g.instanceGroups = nil
 
 	clusterExistsBytes, err := control.Output(exec.Command("gcloud", g.containerArgs("clusters",
-		"list", "--project="+g.project, fmt.Sprintf("--filter=(name=%s AND location=%s", g.cluster, g.location))...))
+		"list", "--project="+g.project, fmt.Sprintf("--filter=(name=%s AND location=%s)", g.cluster, g.location))...))
 	if strings.TrimSpace(string(clusterExistsBytes)) == "" || err != nil {
 		return nil
 	}
