@@ -758,7 +758,7 @@ func (g *gkeDeployer) parseInstanceGroupsFromGcloud(igs string) ([]*ig, error) {
 	fmt.Printf("igs := %s", igs)
 	igURLs := strings.Split(strings.TrimSpace(igs), ";")
 	if len(igURLs) == 0 || len(strings.TrimSpace(igs)) == 0 {
-		fmt.Printf("warning: no instance group URLs returned by gcloud, output %q\n", string(igs))
+		fmt.Printf("warning: no instance group URLs returned by gcloud, output %q", string(igs))
 		return nil, nil
 	}
 	sort.Strings(igURLs)
