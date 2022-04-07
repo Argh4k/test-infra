@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -155,7 +156,7 @@ func getLatestGKEVersion(project, zone, region, releasePrefix string) (string, e
 
 // (only works on gke)
 // getChannelGKEVersion will return master version from a GKE release channel.
-func getChannelGKEVersion(project, zone, region, gkeChannel string) (string, error) {
+func getChannelGKEVersion(project, zone, region, gkeChannel, extractionMethod string) (string, error) {
 	cmd := []string{
 		"container",
 		"get-server-config",
@@ -186,6 +187,7 @@ func getChannelGKEVersion(project, zone, region, gkeChannel string) (string, err
 	type channel struct {
 		Channel        string `json:"channel"`
 		DefaultVersion string `json:"defaultVersion"`
+		ValidVersions  []string `json:"validVersions"`
 	}
 
 	type channels struct {
@@ -214,9 +216,17 @@ func getChannelGKEVersion(project, zone, region, gkeChannel string) (string, err
 		return "", err
 	}
 
+
 	for _, channel := range c.Channels {
 		if strings.EqualFold(channel.Channel, gkeChannel) {
-			return "v" + channel.DefaultVersion, nil
+			if len(channel.ValidVersions) == 0 {
+				return "", fmt.Errorf("channel doest not have valid versions")
+			}
+			if strings.EqualFold(extractionMethod, "latest") {
+				return "v" + channel.ValidVersions[0], nil
+			} else {
+				return "v" + channel.DefaultVersion, nil
+			}
 		}
 	}
 
